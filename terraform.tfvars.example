@@ -1,25 +1,22 @@
-# Все значения ниже — секреты, в реальном виде живут в Vault
-# (secret/oci-proxmox-node/*), сюда идут через wrapper-скрипт по аналогии
-# с vault-apply-wrapper.sh из iac-proxmox-lab, а не коммитятся как есть.
+# Секреты (tenancy_ocid, user_ocid, fingerprint, oci_private_key_path) сюда
+# НЕ идут вообще — они приходят из Vault (secret/oci-proxmox-node/api) через
+# scripts/vault-apply-wrapper.sh как TF_VAR_*. Здесь только конфиг, который
+# секретом не является.
 
-tenancy_ocid          = ""
-user_ocid             = ""
-fingerprint           = ""
-oci_private_key_path  = "~/.oci/oci_api_key.pem"
-region                = "eu-frankfurt-1"
+region = "eu-frankfurt-1"
 
 compartment_ocid = ""
 
 # `oci iam availability-domain list --compartment-id <tenancy_ocid>`
 availability_domain = ""
 
-# `oci compute image list --compartment-id <compartment_ocid> --operating-system Debian`
-# ОБЯЗАТЕЛЬНО Debian 12 (bookworm), не Ubuntu — см. комментарий в bootstrap.sh.tpl
+# `oci compute image list --compartment-id <compartment_ocid> --operating-system Debian --operating-system-version 12 --shape VM.Standard.A1.Flex`
+# ОБЯЗАТЕЛЬНО Debian 12 (bookworm), не Ubuntu — см. cloud-init/bootstrap.sh.tpl
 image_ocid = ""
 
-instance_shape      = "VM.Standard.A1.Flex"
-instance_ocpus      = 2
-instance_memory_gb  = 12
+instance_shape     = "VM.Standard.A1.Flex"
+instance_ocpus     = 2
+instance_memory_gb = 12
 
 hostname = "oci-pve"
 

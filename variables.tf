@@ -19,9 +19,9 @@ variable "fingerprint" {
 }
 
 variable "oci_private_key_path" {
-  description = "Путь до приватного ключа API (PEM), локально на машине, с которой apply"
+  description = "Путь до временного файла с приватным ключом API (PEM). Заполняется автоматически scripts/vault-apply-wrapper.sh из secret/oci-proxmox-node/api — дефолта намеренно нет, чтобы apply не прошёл молча без Vault"
   type        = string
-  default     = "~/.oci/oci_api_key.pem"
+  sensitive   = true
 }
 
 variable "region" {
@@ -88,7 +88,7 @@ variable "instance_memory_gb" {
 }
 
 variable "image_ocid" {
-  description = "OCID образа (Ubuntu 22.04/24.04 aarch64 для Ampere, см. `oci compute image list`)"
+  description = "OCID образа Debian 12 (bookworm) aarch64 для Ampere A1, см. `oci compute image list --operating-system Debian`. ОБЯЗАТЕЛЬНО Debian, не Ubuntu — см. cloud-init/bootstrap.sh.tpl"
   type        = string
 }
 

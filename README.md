@@ -30,22 +30,60 @@ cloud-init bootstrap. Не связан с `iac-proxmox-lab` (там `bpg/proxmo
   (`pvecm add ... --link0 <lan-ip> --link1 <oci-public-ip>` или через
   QDevice-net вместо полного членства — см. обсуждение в чате)
 
+## Секреты (Vault)
+
+Все секреты живут в Vault, не в tfvars и не в env-файлах на диске:
+
+```bash
+# OCI API-креды + приватный ключ целиком (не путь!)
+vault kv put secret/oci-proxmox-node/api \
+  tenancy_ocid="ocid1.tenancy.oc1..xxx" \
+  user_ocid="ocid1.user.oc1..xxx" \
+  fingerprint="xx:xx:xx:..." \
+  private_key=@~/.oci/oci_api_key.pem
+
+# MinIO backend-креды — если ещё не заведены общим секретом для всех
+# terraform-проектов (iac-proxmox-lab их уже использует), заводить не надо,
+# просто убедиться что путь secret/minio/state-backend существует
+vault kv get secret/minio/state-backend
+```
+
 ## Использование
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
-# заполнить секреты (или через Vault-wrapper, как в iac-proxmox-lab)
+# заполнить НЕсекретные поля (region/compartment/shape/сеть)
 
-terraform init \
-  -backend-config="access_key=$MINIO_ACCESS_KEY" \
-  -backend-config="secret_key=$MINIO_SECRET_KEY"
+source scripts/vault-apply-wrapper.sh   # один раз на сессию шелла
 
+terraform init
 terraform plan
 terraform apply
 ```
 
+Wrapper подтягивает OCI API-креды и MinIO backend-креды из Vault при первом
+вызове `terraform` в этой директории за сессию, приватный ключ пишет во
+временный файл 0600 в `/tmp` и подчищает его при выходе из шелла.
+
 После apply — `terraform output public_ip`, ждать ~2-3 минуты на установку
 пакетов + ребут, затем открыть `https://<public_ip>:8006`.
+
+## Структура
+
+```
+oci-proxmox-node/
+├── backend.tf              # terraform{} + required_providers + backend "s3" — ЕДИНСТВЕННОЕ место с этим блоком
+├── providers.tf             # только provider "oci" { ... }
+├── variables.tf
+├── network.tf                # VCN/subnet/IGW/security list
+├── instance.tf                # сам инстанс + cloud-init рендер
+├── outputs.tf
+├── terraform.tfvars.example   # только несекретный конфиг
+├── scripts/
+│   └── vault-apply-wrapper.sh # лениво тянет секреты из Vault на `terraform` в этой директории
+└── cloud-init/
+    └── bootstrap.sh.tpl      # установка Proxmox VE поверх Debian 12
+```
 
 ## TODO / открытые вопросы
 
@@ -55,7 +93,5 @@ terraform apply
 - [ ] Решить: полноценный член кластера (нужен WireGuard-туннель + multi-link
   corosync с увеличенным token timeout) или только QDevice-арбитр
   (проще, не требует VPN — PVE-ноды сами дозваниваются наружу)
-- [ ] Секреты OCI API-ключа перенести в Vault по аналогии с
-  `vault-apply-wrapper.sh`
 - [ ] Если решится полноценное членство — добавить `oci_core_security_list`
   правила под corosync knet (5405-5412/udp) вместо ingress_ports_udp=[]

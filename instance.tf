@@ -9,7 +9,7 @@ resource "oci_core_instance" "pve_node" {
   compartment_id      = var.compartment_ocid
   availability_domain = var.availability_domain
   display_name        = var.hostname
-  shape               = var.instance_shape
+  shape                = var.instance_shape
 
   shape_config {
     ocpus         = var.instance_ocpus
