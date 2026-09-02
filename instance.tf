@@ -12,7 +12,7 @@ resource "oci_core_instance" "pve_node" {
   compartment_id      = var.compartment_ocid
   availability_domain = var.availability_domain
   display_name        = var.hostname
-  shape                = var.instance_shape
+  shape               = var.instance_shape
 
   shape_config {
     ocpus         = var.instance_ocpus
@@ -73,14 +73,17 @@ data "oci_core_vnic_attachments" "pve_node" {
   instance_id    = oci_core_instance.pve_node.id
 }
 
-data "oci_core_vnic" "pve_node" {
+# oci_core_vnic не отдаёт OCID приватного IP напрямую (только сам адрес),
+# а oci_core_public_ip.private_ip_id требует именно OCID объекта — нужен
+# отдельный data source.
+data "oci_core_private_ips" "pve_node" {
   vnic_id = data.oci_core_vnic_attachments.pve_node.vnic_attachments[0].vnic_id
 }
 
 resource "oci_core_public_ip" "pve_node" {
   compartment_id = var.compartment_ocid
   lifetime       = "RESERVED"
-  private_ip_id  = data.oci_core_vnic.pve_node.private_ip_id
+  private_ip_id  = data.oci_core_private_ips.pve_node.private_ips[0].id
   display_name   = "${var.hostname}-reserved-ip"
 }
 
