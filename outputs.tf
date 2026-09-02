@@ -1,4 +1,4 @@
 output "ssh_command" {
-  description = "Быстрый доступ по SSH сразу после apply (юзер зависит от образа — opc для Oracle Linux, debian для Debian-образов из marketplace)"
-  value       = "ssh debian@${oci_core_instance.pve_node.public_ip}"
+  description = "Быстрый доступ по SSH сразу после apply"
+  value       = "ssh debian@${oci_core_public_ip.pve_node.ip_address}"
 }

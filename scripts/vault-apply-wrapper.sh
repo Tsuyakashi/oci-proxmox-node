@@ -38,6 +38,11 @@ terraform() {
     export TF_VAR_oci_private_key_path="$_oci_proxmox_node_key_tmp"
     trap 'rm -f "$_oci_proxmox_node_key_tmp"' EXIT
 
+    export TF_VAR_root_password
+    TF_VAR_root_password=$(vault kv get -field=root_password oci/api) || return 1
+    export TF_VAR_tailscale_authkey
+    TF_VAR_tailscale_authkey=$(vault kv get -field=tailscale_authkey oci/api) || return 1
+
     # --- oci/config: весь остальной конфиг ---
     export TF_VAR_region
     TF_VAR_region=$(vault kv get -field=region oci/config) || return 1
@@ -53,18 +58,18 @@ terraform() {
     TF_VAR_instance_ocpus=$(vault kv get -field=instance_ocpus oci/config) || return 1
     export TF_VAR_instance_memory_gb
     TF_VAR_instance_memory_gb=$(vault kv get -field=instance_memory_gb oci/config) || return 1
+    export TF_VAR_boot_volume_size_gb
+    TF_VAR_boot_volume_size_gb=$(vault kv get -field=boot_volume_size_gb oci/config) || return 1
+    export TF_VAR_block_volume_size_gb
+    TF_VAR_block_volume_size_gb=$(vault kv get -field=block_volume_size_gb oci/config) || return 1
     export TF_VAR_hostname
     TF_VAR_hostname=$(vault kv get -field=hostname oci/config) || return 1
     export TF_VAR_ssh_public_key
     TF_VAR_ssh_public_key=$(vault kv get -field=ssh_public_key oci/config) || return 1
+    export TF_VAR_container_subnet
+    TF_VAR_container_subnet=$(vault kv get -field=container_subnet oci/config) || return 1
     export TF_VAR_pve_version_branch
     TF_VAR_pve_version_branch=$(vault kv get -field=pve_version_branch oci/config) || return 1
-    # Списки — хранятся в Vault как HCL-литерал строкой ("[22, 8006]"),
-    # terraform сам парсит такую строку для list(number) через TF_VAR_*.
-    export TF_VAR_ingress_ports_tcp
-    TF_VAR_ingress_ports_tcp=$(vault kv get -field=ingress_ports_tcp oci/config) || return 1
-    export TF_VAR_ingress_ports_udp
-    TF_VAR_ingress_ports_udp=$(vault kv get -field=ingress_ports_udp oci/config) || return 1
 
     # --- Общая инфраструктура (MinIO), тот же путь, что iac-proxmox-lab ---
     export AWS_ACCESS_KEY_ID

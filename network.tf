@@ -1,3 +1,8 @@
+# Security list по гайду: 8006 (web GUI) сознательно НЕ открыт наружу —
+# доступ идёт через Tailscale (overlay), см. bootstrap.sh.tpl шаг с
+# tailscale up --advertise-routes. Открыты только SSH, ICMP (path MTU
+# discovery) и Tailscale UDP-порт (прямые p2p-соединения вместо relay).
+
 resource "oci_core_vcn" "this" {
   compartment_id = var.compartment_ocid
   cidr_block     = var.vcn_cidr
@@ -34,32 +39,31 @@ resource "oci_core_security_list" "this" {
     protocol    = "all"
   }
 
-  # SSH + всё из ingress_ports_tcp (по умолчанию 22, 8006)
-  dynamic "ingress_security_rules" {
-    for_each = toset(var.ingress_ports_tcp)
-    content {
-      source   = "0.0.0.0/0"
-      protocol = "6" # TCP
-      tcp_options {
-        min = ingress_security_rules.value
-        max = ingress_security_rules.value
-      }
+  # SSH — единственный TCP-порт наружу. 8006 (Proxmox GUI) закрыт
+  # сознательно, идёт через Tailscale.
+  ingress_security_rules {
+    source   = "0.0.0.0/0"
+    protocol = "6" # TCP
+    tcp_options {
+      min = 22
+      max = 22
     }
   }
 
-  dynamic "ingress_security_rules" {
-    for_each = toset(var.ingress_ports_udp)
-    content {
-      source   = "0.0.0.0/0"
-      protocol = "17" # UDP
-      udp_options {
-        min = ingress_security_rules.value
-        max = ingress_security_rules.value
-      }
+  # Tailscale — UDP 41641, даёт прямое p2p-соединение вместо relay через
+  # DERP-серверы Tailscale (медленнее и лишняя зависимость от их аптайма).
+  ingress_security_rules {
+    source   = "0.0.0.0/0"
+    protocol = "17" # UDP
+    udp_options {
+      min = 41641
+      max = 41641
     }
   }
 
-  # ICMP (нужен для path MTU discovery + просто пинги)
+  # ICMP path MTU discovery (type 3 = destination unreachable, code 4 =
+  # fragmentation needed) — без этого черные дыры на MTU-чувствительном
+  # трафике (в частности сам Tailscale/WireGuard).
   ingress_security_rules {
     source   = "0.0.0.0/0"
     protocol = "1"
