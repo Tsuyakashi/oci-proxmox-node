@@ -28,7 +28,7 @@ resource "oci_core_instance" "pve_node" {
   }
 
   metadata = {
-    ssh_authorized_keys = file(var.ssh_public_key_path)
+    ssh_authorized_keys = var.ssh_public_key
     user_data           = base64encode(local.cloud_init_rendered)
   }
 

@@ -25,6 +25,9 @@ else
 fi
 
 # 2. Policy, изолированная от всего, что использует iac-proxmox-lab.
+#    Два пути в mount'е oci/: api (секреты) и config (весь остальной
+#    конфиг — регион/шейп/сеть/ssh-ключ) — оба одинаково create/read/update,
+#    т.к. оператор сеет и правит их сам, не через root/CI единоразово.
 vault policy write oci-proxmox-node - <<POLICY
 path "oci/data/api" {
   capabilities = ["create", "read", "update"]
@@ -32,16 +35,38 @@ path "oci/data/api" {
 path "oci/metadata/api" {
   capabilities = ["read", "list"]
 }
+path "oci/data/config" {
+  capabilities = ["create", "read", "update"]
+}
+path "oci/metadata/config" {
+  capabilities = ["read", "list"]
+}
 POLICY
 
-echo "Policy 'oci-proxmox-node' готова (mount oci/, путь oci/api)."
+echo "Policy 'oci-proxmox-node' готова (mount oci/, пути oci/api и oci/config)."
 echo ""
 echo "Привязать к своему userpass-логину (добавить policy, не заменить —"
 echo "через запятую перечисли все policies, которые уже были у юзера):"
 echo "  vault write auth/userpass/users/<ты> \\"
 echo "    token_policies=\"operator-manual-apply,oci-proxmox-node\""
 echo ""
-echo "Дальше засеять сам секрет (после vault login, если сессия истекла):"
+echo "Дальше засеять секреты (после vault login, если сессия истекла):"
 echo "  vault kv put oci/api \\"
 echo "    tenancy_ocid=\"...\" user_ocid=\"...\" fingerprint=\"...\" \\"
 echo "    private_key=@/home/tsu/.oci/oci_api_key.pem"
+echo ""
+echo "И весь остальной конфиг (не секрет, но тоже теперь только в Vault,"
+echo "никакого terraform.tfvars):"
+echo "  vault kv put oci/config \\"
+echo "    region=\"eu-frankfurt-1\" \\"
+echo "    compartment_ocid=\"...\" \\"
+echo "    availability_domain=\"...\" \\"
+echo "    image_ocid=\"...\" \\"
+echo "    instance_shape=\"VM.Standard.A1.Flex\" \\"
+echo "    instance_ocpus=\"2\" \\"
+echo "    instance_memory_gb=\"12\" \\"
+echo "    hostname=\"oci-pve\" \\"
+echo "    ssh_public_key=\"\$(cat ~/.ssh/id_ed25519.pub)\" \\"
+echo "    pve_version_branch=\"bookworm\" \\"
+echo "    ingress_ports_tcp='[22, 8006]' \\"
+echo "    ingress_ports_udp='[]'"

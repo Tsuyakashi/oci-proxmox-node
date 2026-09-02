@@ -2,25 +2,27 @@
 #
 # Source из ~/.bashrc. Перехватывает вызов `terraform`, и если текущая
 # директория — oci-proxmox-node, на ПЕРВЫЙ вызов за сессию шелла тянет
-# из Vault (CT 300):
-#   - OCI API creds (tenancy/user/fingerprint/private key) — oci/api,
-#     отдельный KV-v2 mount под этот проект (см. vault-policy-init.sh),
-#     НЕ mount "proxmox/" из iac-proxmox-lab
-#   - MinIO backend creds — proxmox/minio-credentials (уже существует,
-#     заведён iac-proxmox-lab; это общая инфраструктура — тот же MinIO
-#     обслуживает оба проекта, — переиспользуется как есть)
+# из Vault (CT 300) ВСЁ, что нужно для apply — ни одного значения через
+# terraform.tfvars, файл сознательно не используется вообще:
+#   - oci/api    — секреты (tenancy/user/fingerprint/private key)
+#   - oci/config — весь остальной конфиг (регион/compartment/AD/образ/
+#                  шейп/ресурсы/hostname/ssh-ключ/порты) — не секрет по
+#                  природе, но тоже только в Vault, не в файле на диске
+#   - proxmox/minio-credentials — MinIO backend creds, общая инфраструктура
+#     с iac-proxmox-lab, отдельно заводить не нужно
 #
 # Требует: `vault login -method=userpass username=<ты>` уже выполнен, и
 # твоему логину назначена policy "oci-proxmox-node" (см.
-# vault-policy-init.sh) — иначе 403 на oci/api.
+# vault-policy-init.sh) — иначе 403 на oci/api или oci/config.
 
 _oci_proxmox_node_vault_loaded=""
 _oci_proxmox_node_key_tmp=""
 
 terraform() {
   if [[ "$PWD" == *"oci-proxmox-node"* && -z "$_oci_proxmox_node_vault_loaded" ]]; then
-    echo "[vault] fetching oci-proxmox-node secrets..." >&2
+    echo "[vault] fetching oci-proxmox-node secrets + config..." >&2
 
+    # --- oci/api: секреты ---
     export TF_VAR_tenancy_ocid
     TF_VAR_tenancy_ocid=$(vault kv get -field=tenancy_ocid oci/api) || return 1
     export TF_VAR_user_ocid
@@ -36,8 +38,35 @@ terraform() {
     export TF_VAR_oci_private_key_path="$_oci_proxmox_node_key_tmp"
     trap 'rm -f "$_oci_proxmox_node_key_tmp"' EXIT
 
-    # Общая инфраструктура (MinIO), не относится к mount'у oci/ — тот же
-    # путь, что уже использует iac-proxmox-lab.
+    # --- oci/config: весь остальной конфиг ---
+    export TF_VAR_region
+    TF_VAR_region=$(vault kv get -field=region oci/config) || return 1
+    export TF_VAR_compartment_ocid
+    TF_VAR_compartment_ocid=$(vault kv get -field=compartment_ocid oci/config) || return 1
+    export TF_VAR_availability_domain
+    TF_VAR_availability_domain=$(vault kv get -field=availability_domain oci/config) || return 1
+    export TF_VAR_image_ocid
+    TF_VAR_image_ocid=$(vault kv get -field=image_ocid oci/config) || return 1
+    export TF_VAR_instance_shape
+    TF_VAR_instance_shape=$(vault kv get -field=instance_shape oci/config) || return 1
+    export TF_VAR_instance_ocpus
+    TF_VAR_instance_ocpus=$(vault kv get -field=instance_ocpus oci/config) || return 1
+    export TF_VAR_instance_memory_gb
+    TF_VAR_instance_memory_gb=$(vault kv get -field=instance_memory_gb oci/config) || return 1
+    export TF_VAR_hostname
+    TF_VAR_hostname=$(vault kv get -field=hostname oci/config) || return 1
+    export TF_VAR_ssh_public_key
+    TF_VAR_ssh_public_key=$(vault kv get -field=ssh_public_key oci/config) || return 1
+    export TF_VAR_pve_version_branch
+    TF_VAR_pve_version_branch=$(vault kv get -field=pve_version_branch oci/config) || return 1
+    # Списки — хранятся в Vault как HCL-литерал строкой ("[22, 8006]"),
+    # terraform сам парсит такую строку для list(number) через TF_VAR_*.
+    export TF_VAR_ingress_ports_tcp
+    TF_VAR_ingress_ports_tcp=$(vault kv get -field=ingress_ports_tcp oci/config) || return 1
+    export TF_VAR_ingress_ports_udp
+    TF_VAR_ingress_ports_udp=$(vault kv get -field=ingress_ports_udp oci/config) || return 1
+
+    # --- Общая инфраструктура (MinIO), тот же путь, что iac-proxmox-lab ---
     export AWS_ACCESS_KEY_ID
     AWS_ACCESS_KEY_ID=$(vault kv get -field=access_key proxmox/minio-credentials) || return 1
     export AWS_SECRET_ACCESS_KEY

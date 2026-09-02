@@ -30,11 +30,15 @@ cloud-init bootstrap. Не связан с `iac-proxmox-lab` (там `bpg/proxmo
   (`pvecm add ... --link0 <lan-ip> --link1 <oci-public-ip>` или через
   QDevice-net вместо полного членства — см. обсуждение в чате)
 
-## Секреты (Vault)
+## Конфиг и секреты — только в Vault, никакого `terraform.tfvars`
 
-Тот же Vault (CT 300), что уже использует `iac-proxmox-lab`, но **отдельный
-KV-v2 mount `oci/`** и отдельная policy `oci-proxmox-node` — секреты этого
-проекта не подмешиваются в mount `proxmox/` и не зависят от его policy.
+Тот же Vault (CT 300), что уже использует `iac-proxmox-lab`, но
+**отдельный KV-v2 mount `oci/`** с двумя путями:
+
+- `oci/api` — секреты (tenancy/user/fingerprint/приватный ключ)
+- `oci/config` — весь остальной конфиг (регион, compartment, шейп,
+  ресурсы, hostname, ssh-ключ, порты) — не секрет по природе, но тоже
+  только в Vault, не в файле на диске
 
 ```bash
 export VAULT_ADDR=http://192.168.100.200:8200
@@ -42,41 +46,53 @@ export VAULT_ADDR=http://192.168.100.200:8200
 # 1. Включить mount oci/ + создать policy oci-proxmox-node (один раз)
 ./scripts/vault-policy-init.sh
 
-# 2. Назначить policy своему логину (добавить к уже имеющимся, не заменить)
+# 2. Если не под root — назначить policy своему логину и перелогиниться
 vault write auth/userpass/users/<ты> \
   token_policies="operator-manual-apply,oci-proxmox-node"
-
-# 3. Залогиниться заново, если токен не подхватил новую policy сразу
 vault login -method=userpass username=<ты>
 
-# 4. Засеять сам секрет — приватный ключ целиком, не путь!
+# 3. Секреты
 vault kv put oci/api \
   tenancy_ocid="ocid1.tenancy.oc1..xxx" \
   user_ocid="ocid1.user.oc1..xxx" \
   fingerprint="xx:xx:xx:..." \
   private_key=@/home/tsu/.oci/oci_api_key.pem
+
+# 4. Весь остальной конфиг — тоже в Vault, не в tfvars
+vault kv put oci/config \
+  region="eu-frankfurt-1" \
+  compartment_ocid="ocid1.compartment.oc1..xxx" \
+  availability_domain="xxxx:EU-FRANKFURT-1-AD-1" \
+  image_ocid="ocid1.image.oc1..xxx" \
+  instance_shape="VM.Standard.A1.Flex" \
+  instance_ocpus="2" \
+  instance_memory_gb="12" \
+  hostname="oci-pve" \
+  ssh_public_key="$(cat ~/.ssh/id_ed25519.pub)" \
+  pve_version_branch="bookworm" \
+  ingress_ports_tcp='[22, 8006]' \
+  ingress_ports_udp='[]'
 ```
 
-MinIO backend-креды (`proxmox/minio-credentials`) заводить не нужно —
-уже существуют, это общая инфраструктура, а не секрет конкретно этого
-проекта.
+`ingress_ports_tcp`/`ingress_ports_udp` хранятся как HCL-литерал строкой
+(`"[22, 8006]"`) — Terraform сам парсит такую строку из `TF_VAR_*` для
+`list(number)`, без доп. обработки в wrapper'е.
+
+`proxmox/minio-credentials` заводить не нужно — уже существует, общая
+инфраструктура с `iac-proxmox-lab`.
 
 ## Использование
 
 ```bash
-cp terraform.tfvars.example terraform.tfvars
-# заполнить НЕсекретные поля (region/compartment/shape/сеть)
-
-source scripts/vault-apply-wrapper.sh   # один раз на сессию шелла
-
+source scripts/vault-apply-wrapper.sh   # один раз на сессию шелла — тянет
+                                          # ВСЁ (секреты + конфиг) из Vault
 terraform init
 terraform plan
 terraform apply
 ```
 
-Wrapper подтягивает OCI API-креды и MinIO backend-креды из Vault при первом
-вызове `terraform` в этой директории за сессию, приватный ключ пишет во
-временный файл 0600 в `/tmp` и подчищает его при выходе из шелла.
+Без `vault login`/policy — `apply` упадёт на первой же переменной
+(`No value for required variable`), не подхватит молча ничего с диска.
 
 После apply — `terraform output public_ip`, ждать ~2-3 минуты на установку
 пакетов + ребут, затем открыть `https://<public_ip>:8006`.
@@ -91,7 +107,6 @@ oci-proxmox-node/
 ├── network.tf                # VCN/subnet/IGW/security list
 ├── instance.tf                # сам инстанс + cloud-init рендер
 ├── outputs.tf
-├── terraform.tfvars.example   # только несекретный конфиг
 ├── scripts/
 │   ├── vault-policy-init.sh    # включает mount oci/ + policy oci-proxmox-node (запустить один раз)
 │   └── vault-apply-wrapper.sh # лениво тянет секреты из Vault на `terraform` в этой директории
