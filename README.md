@@ -46,7 +46,8 @@ oci os object put --bucket-name os-images \
   --file debian-13-genericcloud-arm64.qcow2 \
   --name debian-13-genericcloud-arm64.qcow2
 
-# Импорт с нужной комбинацией launch_mode/firmware
+# Импорт с нужной комбинацией launch_mode/firmware (скрипт лежит в
+# корне репо, общий для всех environments — сейчас он один)
 pip install oci requests --break-system-packages
 python3 scripts/import-debian-image.py --bucket os-images
 ```
@@ -67,7 +68,8 @@ python3 scripts/import-debian-image.py --bucket os-images
 ```bash
 export VAULT_ADDR=http://192.168.100.200:8200
 
-# 1. Включить mount oci/ + создать policy oci-proxmox-node (один раз)
+# 1. Включить mount oci/ + создать policy oci-proxmox-node (один раз,
+#    запускается из корня репо — общий для всех environments)
 ./scripts/vault-policy-init.sh
 
 # 2. Если не под root — назначить policy своему логину и перелогиниться
@@ -111,7 +113,8 @@ vault kv put oci/config \
 ## Шаг 3 — apply
 
 ```bash
-source scripts/vault-apply-wrapper.sh   # один раз на сессию шелла
+cd env/pve-node
+source ../../scripts/vault-apply-wrapper.sh   # один раз на сессию шелла
 terraform init
 terraform plan
 terraform apply
@@ -181,6 +184,7 @@ Serial console log доступен через API даже без Oracle Cloud 
 полезно, если SSH ещё не поднялся или Stage 2 упал по дороге:
 
 ```bash
+# из env/pve-node
 INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null || echo "<ocid1.instance...>")
 
 HISTORY_ID=$(oci compute console-history capture \
@@ -198,20 +202,35 @@ oci compute console-history get-content \
 
 ## Структура
 
+Стандартный `mod/` + `env/` split (тот же паттерн, что `iac-proxmox-lab`,
+только с сокращёнными именами папок). `mod/oci-pve-node` — вся
+инфраструктура (сеть, инстанс, диски, reserved IP), без
+`backend`/`provider` — их задаёт вызывающий root-модуль. Сейчас всего один
+environment (`env/pve-node`), но при появлении второй ноды новый
+environment переиспользует тот же модуль без копипаста.
+
 ```
 oci-proxmox-node/
-├── backend.tf                    # terraform{} + required_providers + backend "s3" — ЕДИНСТВЕННОЕ место с этим блоком
-├── providers.tf                  # только provider "oci" { ... }
-├── variables.tf
-├── network.tf                    # VCN/subnet/IGW/security list (22/tcp + 41641/udp Tailscale, БЕЗ 8006)
-├── instance.tf                   # инстанс + block volume (ZFS) + reserved public IP
-├── outputs.tf
+├── mod/
+│   └── oci-pve-node/              # переиспользуемый модуль — БЕЗ backend/provider
+│       ├── versions.tf            #   required_version + required_providers
+│       ├── network.tf             #   VCN/subnet/IGW/security list (22/tcp + 41641/udp Tailscale, БЕЗ 8006)
+│       ├── instance.tf            #   инстанс + block volume (ZFS) + reserved public IP
+│       ├── variables.tf           #   всё, что нужно ресурсам — БЕЗ auth-переменных провайдера
+│       ├── outputs.tf
+│       └── cloud-init/bootstrap.sh.tpl  # двухстадийный: kernel swap -> reboot -> proxmox-ve+storage+network+tailscale
+├── env/
+│   └── pve-node/                  # ROOT MODULE — единственный environment на сегодня
+│       ├── backend.tf             #   terraform{} + required_providers + backend "s3" — ЕДИНСТВЕННОЕ место с этим блоком
+│       ├── providers.tf           #   provider "oci" { ... } — auth-переменные живут только здесь
+│       ├── main.tf                #   вызов module.pve_node
+│       ├── variables.tf           #   полный список — то, во что реально попадают TF_VAR_*
+│       └── outputs.tf             #   реэкспорт из модуля
 ├── scripts/
-│   ├── import-debian-image.py    # Шаг 1 — разовый импорт образа, вне Terraform
-│   ├── vault-policy-init.sh      # включает mount oci/ + policy oci-proxmox-node (запустить один раз)
-│   └── vault-apply-wrapper.sh    # лениво тянет секреты+конфиг из Vault на `terraform` в этой директории
-└── cloud-init/
-    └── bootstrap.sh.tpl          # двухстадийный: kernel swap -> reboot -> proxmox-ve+storage+network+tailscale
+│   ├── import-debian-image.py     # Шаг 1 — разовый импорт образа, вне Terraform
+│   ├── vault-policy-init.sh       # включает mount oci/ + policy oci-proxmox-node (запустить один раз)
+│   └── vault-apply-wrapper.sh     # лениво тянет секреты+конфиг из Vault на `terraform` в env/*
+└── .gitignore
 ```
 
 ## TODO / открытые вопросы
