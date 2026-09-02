@@ -43,9 +43,19 @@ ff02::1		ip6-allnodes
 ff02::2		ip6-allrouters
 EOF
 
+# --- IPv4-only: у OCI-инстанса нет рабочего IPv6-маршрута
+# ("Network is unreachable" на попытке IPv6), некоторые сетевые тулы
+# (в частности wget) в такой ситуации не откатываются на IPv4 так же
+# резво, как curl — фиксируем IPv4 явно, чтобы не ловить силентные
+# зависания/фейлы на каждом сетевом вызове дальше по скрипту ---
+echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+
 # --- Репозиторий Proxmox VE (trixie — Debian 13, НЕ bookworm) ---
-wget -q https://enterprise.proxmox.com/debian/proxmox-archive-keyring-${pve_version_branch}.gpg \
-     -O /usr/share/keyrings/proxmox-archive-keyring.gpg
+if ! wget -4 https://enterprise.proxmox.com/debian/proxmox-archive-keyring-${pve_version_branch}.gpg \
+     -O /usr/share/keyrings/proxmox-archive-keyring.gpg; then
+    echo "FATAL: не удалось скачать proxmox-archive-keyring — проверь сетевой доступ (curl -4 -v <url> для диагностики)" >&2
+    exit 1
+fi
 
 cat >/etc/apt/sources.list.d/pve-install-repo.sources <<EOF
 Types: deb
@@ -205,7 +215,7 @@ systemctl enable --now dnsmasq
 timedatectl show --property=Timezone --value > /etc/timezone 2>/dev/null || echo "UTC" > /etc/timezone
 
 # --- Tailscale: remote-доступ к веб-GUI вместо открытия 8006 наружу ---
-curl -fsSL https://tailscale.com/install.sh | sh
+curl -4 -fsSL https://tailscale.com/install.sh | sh
 
 TAILSCALE_AUTHKEY_VAL="__TAILSCALE_AUTHKEY__"
 if [ -n "$${TAILSCALE_AUTHKEY_VAL}" ]; then
