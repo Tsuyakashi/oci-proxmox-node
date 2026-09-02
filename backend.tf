@@ -11,7 +11,9 @@ terraform {
   # Self-hosted MinIO (тот же инстанс, что у iac-proxmox-lab), но
   # ОТДЕЛЬНЫЙ bucket — стейты не пересекаются.
   # access_key/secret_key НЕ заданы тут намеренно — приходят через
-  # `terraform init -backend-config=...` из scripts/vault-apply-wrapper.sh
+  # `terraform init -backend-config=...` из scripts/vault-apply-wrapper.sh,
+  # который берёт их из proxmox/minio-credentials — того же Vault-пути,
+  # что уже использует iac-proxmox-lab, ничего нового заводить не нужно.
   backend "s3" {
     bucket                      = "oci-proxmox-node"
     key                         = "terraform.tfstate"
