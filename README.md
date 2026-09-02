@@ -32,29 +32,34 @@ cloud-init bootstrap. Не связан с `iac-proxmox-lab` (там `bpg/proxmo
 
 ## Секреты (Vault)
 
-Тот же Vault (CT 300), что уже использует `iac-proxmox-lab` — тот же mount
-`proxmox/`, никакого отдельного mount под этот проект заводить не нужно.
+Тот же Vault (CT 300), что уже использует `iac-proxmox-lab`, но **отдельный
+KV-v2 mount `oci/`** и отдельная policy `oci-proxmox-node` — секреты этого
+проекта не подмешиваются в mount `proxmox/` и не зависят от его policy.
 
 ```bash
-# 1. Расширить operator-manual-apply policy доступом к новому пути
-#    (нужно один раз; без этого шага kv put/get на proxmox/oci-api
-#    падает с 403 "please ensure client's policies grant access to path")
 export VAULT_ADDR=http://192.168.100.200:8200
+
+# 1. Включить mount oci/ + создать policy oci-proxmox-node (один раз)
 ./scripts/vault-policy-init.sh
 
-# 2. Залогиниться (если сессия ещё не залогинена)
+# 2. Назначить policy своему логину (добавить к уже имеющимся, не заменить)
+vault write auth/userpass/users/<ты> \
+  token_policies="operator-manual-apply,oci-proxmox-node"
+
+# 3. Залогиниться заново, если токен не подхватил новую policy сразу
 vault login -method=userpass username=<ты>
 
-# 3. Засеять сам секрет — приватный ключ целиком, не путь!
-vault kv put proxmox/oci-api \
+# 4. Засеять сам секрет — приватный ключ целиком, не путь!
+vault kv put oci/api \
   tenancy_ocid="ocid1.tenancy.oc1..xxx" \
   user_ocid="ocid1.user.oc1..xxx" \
   fingerprint="xx:xx:xx:..." \
   private_key=@/home/tsu/.oci/oci_api_key.pem
 ```
 
-`proxmox/minio-credentials` заводить не нужно — уже существует, заведён
-`iac-proxmox-lab`, этот проект просто его переиспользует.
+MinIO backend-креды (`proxmox/minio-credentials`) заводить не нужно —
+уже существуют, это общая инфраструктура, а не секрет конкретно этого
+проекта.
 
 ## Использование
 
@@ -88,7 +93,7 @@ oci-proxmox-node/
 ├── outputs.tf
 ├── terraform.tfvars.example   # только несекретный конфиг
 ├── scripts/
-│   ├── vault-policy-init.sh    # расширяет operator-manual-apply доступом к proxmox/oci-api (запустить один раз)
+│   ├── vault-policy-init.sh    # включает mount oci/ + policy oci-proxmox-node (запустить один раз)
 │   └── vault-apply-wrapper.sh # лениво тянет секреты из Vault на `terraform` в этой директории
 └── cloud-init/
     └── bootstrap.sh.tpl      # установка Proxmox VE поверх Debian 12
