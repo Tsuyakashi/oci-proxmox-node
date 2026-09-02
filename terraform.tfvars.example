@@ -1,0 +1,29 @@
+# Все значения ниже — секреты, в реальном виде живут в Vault
+# (secret/oci-proxmox-node/*), сюда идут через wrapper-скрипт по аналогии
+# с vault-apply-wrapper.sh из iac-proxmox-lab, а не коммитятся как есть.
+
+tenancy_ocid          = ""
+user_ocid             = ""
+fingerprint           = ""
+oci_private_key_path  = "~/.oci/oci_api_key.pem"
+region                = "eu-frankfurt-1"
+
+compartment_ocid = ""
+
+# `oci iam availability-domain list --compartment-id <tenancy_ocid>`
+availability_domain = ""
+
+# `oci compute image list --compartment-id <compartment_ocid> --operating-system Debian`
+# ОБЯЗАТЕЛЬНО Debian 12 (bookworm), не Ubuntu — см. комментарий в bootstrap.sh.tpl
+image_ocid = ""
+
+instance_shape      = "VM.Standard.A1.Flex"
+instance_ocpus      = 2
+instance_memory_gb  = 12
+
+hostname = "oci-pve"
+
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+
+ingress_ports_tcp = [22, 8006]
+ingress_ports_udp = []
