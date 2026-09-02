@@ -43,12 +43,20 @@ ff02::1		ip6-allnodes
 ff02::2		ip6-allrouters
 EOF
 
-# --- IPv4-only: у OCI-инстанса нет рабочего IPv6-маршрута
-# ("Network is unreachable" на попытке IPv6), некоторые сетевые тулы
-# (в частности wget) в такой ситуации не откатываются на IPv4 так же
-# резво, как curl — фиксируем IPv4 явно, чтобы не ловить силентные
-# зависания/фейлы на каждом сетевом вызове дальше по скрипту ---
-echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+# --- IPv4-only + не-интерактивные dpkg-конфликты конфигов: у OCI-инстанса
+# нет рабочего IPv6-маршрута ("Network is unreachable" на попытке IPv6,
+# некоторые тулы вроде wget не откатываются на IPv4 так же резво, как
+# curl), а скрипт сам правит /etc/default/grub и /etc/network/interfaces
+# ДО установки пакетов, которые эти файлы тоже поставляют — без явных
+# dpkg-флагов apt зависает на интерактивном "keep local / take package's
+# version" промпте, читающем несуществующий stdin (никогда не ответит) ---
+cat >/etc/apt/apt.conf.d/99pve-bootstrap-unattended <<'EOF'
+Acquire::ForceIPv4 "true";
+Dpkg::Options {
+   "--force-confdef";
+   "--force-confold";
+}
+EOF
 
 # --- Репозиторий Proxmox VE (trixie — Debian 13, НЕ bookworm) ---
 if ! wget -4 https://enterprise.proxmox.com/debian/proxmox-archive-keyring-${pve_version_branch}.gpg \
@@ -77,7 +85,7 @@ fi
 sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf
 
 sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub
-apt-get install -y -qq proxmox-default-kernel
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq proxmox-default-kernel
 update-grub
 
 CFG=/boot/grub/grub.cfg
