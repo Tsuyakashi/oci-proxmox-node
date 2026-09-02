@@ -127,6 +127,11 @@ grub-set-default "$${SUBMENU}>$${DEB_ENTRY}"   # persistent fallback — есл�
 grub-reboot      "$${SUBMENU}>$${PVE_ENTRY}"   # one-shot — следующий (и только следующий) ребут грузит pve-ядро
 
 # --- systemd-юнит под stage2, сработает ПОСЛЕ ребута на новом ядре ---
+# umask 077 — файл ниже до chmod'а на секунду существует с дефолтными
+# правами; после sed туда попадут root_password/tailscale_authkey, так что
+# закрываем окно чтения ещё на этапе создания файла, chmod 700 ниже —
+# уже вторичная подстраховка (даёт ещё и +x).
+umask 077
 cat >/usr/local/sbin/pve-bootstrap-stage2.sh <<'STAGE2EOF'
 #!/bin/bash
 set -euxo pipefail
@@ -150,6 +155,11 @@ iface lo inet loopback
 
 source /etc/network/interfaces.d/*
 EOF
+
+# Не полагаемся на кэш apt из Stage 1 — между ним и этим install прошёл
+# ребут (время не гарантировано, upstream-зеркало могло обновиться и
+# инвалидировать закэшированные хэши, см. реальный "Hash Sum mismatch").
+apt-get update -qq
 
 # postfix спросит интерактивно без debconf preseed — форсируем Local only
 echo "postfix postfix/main_mailer_type select Local only" | debconf-set-selections
@@ -261,6 +271,10 @@ printf 'net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n' \
   > /etc/sysctl.d/99-tailscale.conf
 sysctl --system
 
+# ethtool не входит в базовый cloud-образ Debian — ставим явно, иначе
+# systemd-юнит ниже (tailscale-tweaks) падает на последнем шаге Stage 2.
+apt-get install -y -qq ethtool
+
 cat >/etc/systemd/system/tailscale-tweaks.service <<EOF
 [Unit]
 Description=Tailscale subnet-routing tweaks
@@ -293,6 +307,7 @@ STAGE2EOF
 sed -i "s|__ROOT_PASSWORD__|${root_password}|" /usr/local/sbin/pve-bootstrap-stage2.sh
 sed -i "s|__TAILSCALE_AUTHKEY__|${tailscale_authkey}|" /usr/local/sbin/pve-bootstrap-stage2.sh
 chmod 700 /usr/local/sbin/pve-bootstrap-stage2.sh  # rwx------: только root, но исполняем — содержит root_password/authkey в открытом виде, чуть шире не давать
+umask 022
 
 cat >/etc/systemd/system/pve-bootstrap-stage2.service <<'EOF'
 [Unit]
