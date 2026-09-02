@@ -292,8 +292,7 @@ STAGE2EOF
 # show`/journalctl-дампы конфигурации юнита).
 sed -i "s|__ROOT_PASSWORD__|${root_password}|" /usr/local/sbin/pve-bootstrap-stage2.sh
 sed -i "s|__TAILSCALE_AUTHKEY__|${tailscale_authkey}|" /usr/local/sbin/pve-bootstrap-stage2.sh
-chmod 700 /usr/local/sbin/pve-bootstrap-stage2.sh
-chmod 600 /usr/local/sbin/pve-bootstrap-stage2.sh  # содержит root_password/authkey в открытом виде
+chmod 700 /usr/local/sbin/pve-bootstrap-stage2.sh  # rwx------: только root, но исполняем — содержит root_password/authkey в открытом виде, чуть шире не давать
 
 cat >/etc/systemd/system/pve-bootstrap-stage2.service <<'EOF'
 [Unit]
