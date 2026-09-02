@@ -58,6 +58,23 @@ Dpkg::Options {
 }
 EOF
 
+# cloud-init может запустить user_data ДО того, как DNS реально готов
+# (systemd-resolved ещё не получил адреса серверов от DHCP) — без этого
+# ожидания первый же сетевой вызов падает с "Name or service not known"
+# по чистой гонке, а не по реальной поломке сети.
+DNS_READY=0
+for i in $(seq 1 30); do
+    if getent hosts enterprise.proxmox.com >/dev/null 2>&1; then
+        DNS_READY=1
+        break
+    fi
+    sleep 2
+done
+if [ "$${DNS_READY}" -ne 1 ]; then
+    echo "FATAL: DNS не поднялся за 60 секунд (getent hosts enterprise.proxmox.com не резолвит) — проверь /etc/resolv.conf и resolvectl status" >&2
+    exit 1
+fi
+
 # --- Репозиторий Proxmox VE (trixie — Debian 13, НЕ bookworm) ---
 if ! wget -4 https://enterprise.proxmox.com/debian/proxmox-archive-keyring-${pve_version_branch}.gpg \
      -O /usr/share/keyrings/proxmox-archive-keyring.gpg; then
