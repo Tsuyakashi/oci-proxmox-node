@@ -1,0 +1,30 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Секреты — реальный tfvars никогда не коммитим, только .example
+terraform.tfvars
+*.auto.tfvars
+*.auto.tfvars.json
+
+# OCI / SSH ключи, если случайно окажутся в репо
+*.pem
+*.key
+oci_api_key*
+
+# Логи бутстрапа
+*.log
+
+# OS/editor junk
+.DS_Store
+.idea/
+.vscode/
