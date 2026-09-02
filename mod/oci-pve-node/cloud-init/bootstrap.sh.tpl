@@ -106,7 +106,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq proxmox-default-kernel
 update-grub
 
 CFG=/boot/grub/grub.cfg
-SUBMENU=$(grep -oP "^submenu '[^']*' \$menuentry_id_option '\K[^']+" "$${CFG}" | head -1)
+SUBMENU=$(grep -oP "^submenu '[^']*' \\\$menuentry_id_option '\K[^']+" "$${CFG}" | head -1)
 
 PVE_ENTRY=""
 DEB_ENTRY=""
@@ -116,7 +116,12 @@ while read -r e; do
     *pve*) [ -z "$${PVE_ENTRY}" ] && PVE_ENTRY="$e" ;;
     *)     [ -z "$${DEB_ENTRY}" ] && DEB_ENTRY="$e" ;;
   esac
-done < <(grep -oP "\$menuentry_id_option '\K[^']*-advanced-[^']*" "$${CFG}")
+done < <(grep -oP "\\\$menuentry_id_option '\K[^']*-advanced-[^']*" "$${CFG}")
+
+if [ -z "$${PVE_ENTRY}" ] || [ -z "$${DEB_ENTRY}" ]; then
+    echo "FATAL: не удалось распарсить grub.cfg (PVE_ENTRY='$${PVE_ENTRY}' DEB_ENTRY='$${DEB_ENTRY}') — проверь структуру $${CFG} вручную" >&2
+    exit 1
+fi
 
 grub-set-default "$${SUBMENU}>$${DEB_ENTRY}"   # persistent fallback — если pve-ядро не взлетит, следующий обычный ребут вернёт Debian
 grub-reboot      "$${SUBMENU}>$${PVE_ENTRY}"   # one-shot — следующий (и только следующий) ребут грузит pve-ядро
