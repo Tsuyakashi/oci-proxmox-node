@@ -1,7 +1,8 @@
-# Security list по гайду: 8006 (web GUI) сознательно НЕ открыт наружу —
-# доступ идёт через Tailscale (overlay), см. bootstrap.sh.tpl шаг с
-# tailscale up --advertise-routes. Открыты только SSH, ICMP (path MTU
-# discovery) и Tailscale UDP-порт (прямые p2p-соединения вместо relay).
+# Security list: TCP-ingress нет вообще — ни 22, ни 8006. Весь доступ к
+# ноде идёт через Tailscale (overlay), см. bootstrap.sh.tpl шаг с
+# tailscale up --advertise-routes. Открыты только Tailscale UDP-порт
+# (прямые p2p-соединения вместо relay через DERP) и ICMP (path MTU
+# discovery).
 
 resource "oci_core_vcn" "this" {
   compartment_id = var.compartment_ocid
@@ -37,17 +38,6 @@ resource "oci_core_security_list" "this" {
   egress_security_rules {
     destination = "0.0.0.0/0"
     protocol    = "all"
-  }
-
-  # SSH — единственный TCP-порт наружу. 8006 (Proxmox GUI) закрыт
-  # сознательно, идёт через Tailscale.
-  ingress_security_rules {
-    source   = "0.0.0.0/0"
-    protocol = "6" # TCP
-    tcp_options {
-      min = 22
-      max = 22
-    }
   }
 
   # Tailscale — UDP 41641, даёт прямое p2p-соединение вместо relay через
