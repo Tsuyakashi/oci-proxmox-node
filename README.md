@@ -230,6 +230,8 @@ oci-proxmox-node/
 │   ├── import-debian-image.py     # Шаг 1 — разовый импорт образа, вне Terraform
 │   ├── vault-policy-init.sh       # включает mount oci/ + policy oci-proxmox-node (запустить один раз)
 │   └── vault-apply-wrapper.sh     # лениво тянет секреты+конфиг из Vault на `terraform` в env/*
+├── docs/
+│   └── nexus-cluster-join.md      # присоединение к домашнему кластеру: текущее состояние, разбор, TODO
 └── .gitignore
 ```
 
@@ -238,8 +240,9 @@ oci-proxmox-node/
 - [ ] Проверить `is_pv_encryption_in_transit_enabled` на block volume —
   сейчас не выставлен (default false), совпадает с флагом, заданным при
   импорте образа, но комбинация не тестировалась апстримом
-- [ ] Присоединение к домашнему `nexus-cluster` — не реализовано,
-  отдельная тема (WireGuard-туннель + multi-link corosync с увеличенным
-  token timeout, либо только QDevice-арбитр — см. обсуждение в чате)
+- [ ] Присоединение к домашнему `nexus-cluster` — нода **добавлена**
+  (`pvecm`, Config Version 5, nodeid 3), но изолирована: corosync не
+  собирает кольцо с домашними нодами. Разбор + TODO —
+  [`docs/nexus-cluster-join.md`](docs/nexus-cluster-join.md)
 - [ ] `tailscale_authkey` — если брать одноразовый (не reusable), придётся
   каждый пересоздание инстанса вручную генерить новый в консоли Tailscale
