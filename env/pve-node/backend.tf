@@ -12,7 +12,7 @@ terraform {
   # ОТДЕЛЬНЫЙ bucket — стейты не пересекаются.
   # access_key/secret_key НЕ заданы тут намеренно — приходят через
   # `terraform init -backend-config=...` из scripts/vault-apply-wrapper.sh,
-  # который берёт их из proxmox/minio-credentials — того же Vault-пути,
+  # который берёт их из minio/credentials — того же Vault-пути,
   # что уже использует iac-proxmox-lab, ничего нового заводить не нужно.
   #
   # endpoints.s3 / use_path_style — актуальный синтаксис (не

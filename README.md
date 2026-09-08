@@ -103,8 +103,10 @@ vault kv put oci/config \
   pve_version_branch="trixie"
 ```
 
-`proxmox/minio-credentials` заводить не нужно — уже существует, общая
-инфраструктура с `iac-proxmox-lab`.
+`minio/credentials` заводить не нужно — уже существует, общая
+инфраструктура с `iac-proxmox-lab` (базовая установка Proxmox владеет
+`proxmox/*`, `minio/credentials`, `github-actions/*`; этот репо добавляет
+только свой mount `oci/`).
 
 **Выбирай `hostname` окончательно сразу** — Proxmox зашивает его в
 `/etc/pve/nodes/<name>/`, переименование задним числом мучительно
