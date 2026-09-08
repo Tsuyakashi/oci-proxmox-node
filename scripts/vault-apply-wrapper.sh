@@ -8,8 +8,9 @@
 #   - oci/config — весь остальной конфиг (регион/compartment/AD/образ/
 #                  шейп/ресурсы/hostname/ssh-ключ/порты) — не секрет по
 #                  природе, но тоже только в Vault, не в файле на диске
-#   - proxmox/minio-credentials — MinIO backend creds, общая инфраструктура
-#     с iac-proxmox-lab, отдельно заводить не нужно
+#   - minio/credentials — MinIO backend creds, общая инфраструктура
+#     с iac-proxmox-lab, отдельно заводить не нужно (было
+#     proxmox/minio-credentials до реорганизации секретов по сервису)
 #
 # Требует: `vault login -method=userpass username=<ты>` уже выполнен, и
 # твоему логину назначена policy "oci-proxmox-node" (см.
@@ -73,9 +74,9 @@ terraform() {
 
     # --- Общая инфраструктура (MinIO), тот же путь, что iac-proxmox-lab ---
     export AWS_ACCESS_KEY_ID
-    AWS_ACCESS_KEY_ID=$(vault kv get -field=access_key proxmox/minio-credentials) || return 1
+    AWS_ACCESS_KEY_ID=$(vault kv get -field=access_key minio/credentials) || return 1
     export AWS_SECRET_ACCESS_KEY
-    AWS_SECRET_ACCESS_KEY=$(vault kv get -field=secret_key proxmox/minio-credentials) || return 1
+    AWS_SECRET_ACCESS_KEY=$(vault kv get -field=secret_key minio/credentials) || return 1
 
     _oci_proxmox_node_vault_loaded=1
   fi

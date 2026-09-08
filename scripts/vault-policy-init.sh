@@ -6,9 +6,10 @@
 # "oci-proxmox-node" под этот проект — сознательно не завязано на mount
 # iac-proxmox-lab, чтобы секреты этого репо не жили вперемешку с чужими
 # (Proxmox API token, SSH-ключи и т.д.) под одним policy-документом.
-# MinIO backend-креды по-прежнему читаются из существующего
-# proxmox/minio-credentials (см. vault-apply-wrapper.sh) — это separate
-# concern, инфраструктурный секрет, а не то, что этот скрипт заводит.
+# MinIO backend-креды по-прежнему читаются из общего minio/credentials
+# (см. vault-apply-wrapper.sh) — это separate concern, инфраструктурный
+# секрет базовой установки iac-proxmox-lab, а не то, что этот скрипт
+# заводит (было proxmox/minio-credentials до реорганизации по сервису).
 #
 # Запуск (один раз):
 #   VAULT_ADDR=http://192.168.100.200:8200 ./scripts/vault-policy-init.sh
@@ -25,25 +26,20 @@ else
 fi
 
 # 2. Policy, изолированная от всего, что использует iac-proxmox-lab.
-#    Два пути в mount'е oci/: api (секреты) и config (весь остальной
-#    конфиг — регион/шейп/сеть/ssh-ключ) — оба одинаково create/read/update,
-#    т.к. оператор сеет и правит их сам, не через root/CI единоразово.
+#    Глоб по всему mount'у oci/ (сейчас пути api — секреты, и config —
+#    весь остальной конфиг): create/read/update, т.к. оператор сеет и
+#    правит их сам, не через root/CI единоразово. Тот же принцип, что у
+#    базовых policy iac-proxmox-lab (proxmox/data/*, minio/data/*).
 vault policy write oci-proxmox-node - <<POLICY
-path "oci/data/api" {
+path "oci/data/*" {
   capabilities = ["create", "read", "update"]
 }
-path "oci/metadata/api" {
-  capabilities = ["read", "list"]
-}
-path "oci/data/config" {
-  capabilities = ["create", "read", "update"]
-}
-path "oci/metadata/config" {
+path "oci/metadata/*" {
   capabilities = ["read", "list"]
 }
 POLICY
 
-echo "Policy 'oci-proxmox-node' готова (mount oci/, пути oci/api и oci/config)."
+echo "Policy 'oci-proxmox-node' готова (mount oci/, глоб oci/data/*)."
 echo ""
 echo "Привязать к своему userpass-логину (добавить policy, не заменить —"
 echo "через запятую перечисли все policies, которые уже были у юзера):"
