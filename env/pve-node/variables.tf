@@ -36,7 +36,7 @@ variable "root_password" {
 }
 
 variable "tailscale_authkey" {
-  description = "Tailscale auth key (Settings -> Keys в консоли Tailscale) — даёт unattended `tailscale up` без ручного логина. Одобрение advertised route (container_subnet) всё равно нужно сделать руками в admin-консоли один раз."
+  description = "Tailscale auth key (Settings -> Keys в консоли Tailscale) — даёт unattended `tailscale up` без ручного логина. Должен быть выпущен с правом ставить tag:app-connector (нода поднимается app-connector'ом), иначе `tailscale up` тег отклонит. Маршруты коннектора авто-одобряются через autoApprovers в tailscale-acl."
   type        = string
   sensitive   = true
 }

@@ -254,17 +254,27 @@ systemctl enable --now dnsmasq
 
 timedatectl show --property=Timezone --value > /etc/timezone 2>/dev/null || echo "UTC" > /etc/timezone
 
-# --- Tailscale: remote-доступ к веб-GUI вместо открытия 8006 наружу ---
+# --- Tailscale: remote-доступ к веб-GUI (вместо открытия 8006 наружу) +
+#     роль app-connector для группы smart-vpn-users (селективный по
+#     доменам egress через эту ноду — chatgpt/claude/hashicorp/…, список
+#     в tailscale-acl/policy/acl.hujson). Домены-маршруты коннектора
+#     авто-одобряются через autoApprovers.routes(0.0.0.0/0) в той же ACL,
+#     ручного approve в admin-консоли не требуется.
+#
+#     tag:app-connector: authkey должен быть выпущен с правом ставить этот
+#     тег (tagOwners = autogroup:admin) — иначе `tailscale up` его отклонит.
+#     Контейнерную подсеть эта нода в тайлнет НЕ advertised (доступ к
+#     самому хосту — по его tailscale-адресу). ---
 curl -4 -fsSL https://tailscale.com/install.sh | sh
 
 TAILSCALE_AUTHKEY_VAL="__TAILSCALE_AUTHKEY__"
 if [ -n "$${TAILSCALE_AUTHKEY_VAL}" ]; then
     tailscale up --authkey="$${TAILSCALE_AUTHKEY_VAL}" \
-        --advertise-routes="${container_subnet}" --accept-routes \
-        --accept-dns=false --hostname="${hostname}"
+        --advertise-tags=tag:app-connector --advertise-connector \
+        --accept-routes --accept-dns=false --hostname="${hostname}"
 else
     echo "WARNING: TAILSCALE_AUTHKEY не задан — tailscale up не выполнен автоматически." >&2
-    echo "Выполни руками: tailscale up --advertise-routes=${container_subnet} --accept-routes --accept-dns=false --hostname=${hostname}" >&2
+    echo "Выполни руками: tailscale up --advertise-tags=tag:app-connector --advertise-connector --accept-routes --accept-dns=false --hostname=${hostname}" >&2
 fi
 
 printf 'net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n' \
@@ -277,7 +287,7 @@ apt-get install -y -qq ethtool
 
 cat >/etc/systemd/system/tailscale-tweaks.service <<EOF
 [Unit]
-Description=Tailscale subnet-routing tweaks
+Description=Tailscale app-connector forwarding tweaks
 After=tailscaled.service network-online.target
 Wants=tailscaled.service
 
@@ -294,8 +304,10 @@ systemctl enable --now tailscale-tweaks.service
 
 echo "=== STAGE 2 DONE: $(date) ==="
 echo "Web GUI: https://<tailscale-ip>:8006 (root, realm Linux PAM)"
-echo "Не забудь одобрить advertised route в Tailscale admin console:"
-echo "  https://login.tailscale.com/admin/machines -> ${hostname} -> Edit route settings"
+echo "App-connector: маршруты авто-одобряются через autoApprovers в"
+echo "tailscale-acl. Проверь, что нода взяла tag:app-connector:"
+echo "  https://login.tailscale.com/admin/machines -> ${hostname}"
+echo "  (если authkey был без права на тег — переиздай key с tag:app-connector)"
 
 # Самоотключение — эта стадия больше не должна запускаться на будущих ребутах.
 systemctl disable pve-bootstrap-stage2.service

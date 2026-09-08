@@ -139,21 +139,31 @@ Terraform поднимает сеть, инстанс (boot volume + отдел�
    ZFS-пул `tank` на втором диске, NAT-мост `vmbr0` для контейнеров
    (OCI vNIC пропускает трафик только со своим MAC — прямой bridge на
    физический интерфейс не пропустит гостевой трафик), dnsmasq под DHCP
-   контейнерам, Tailscale (`--advertise-routes` на `container_subnet`).
+   контейнерам, Tailscale (`--advertise-connector`, `tag:app-connector`).
 
 Прогресс — `ssh debian@<public_ip> 'tail -f /var/log/pve-bootstrap.log'`
 (вывод и Stage 1, и Stage 2 пишется в один файл).
 
-## Шаг 4 — одобрить route в Tailscale (руками, один раз)
+## Шаг 4 — Tailscale app-connector
 
-`tailscale up --advertise-routes` не включает маршрут автоматически —
-зайти в https://login.tailscale.com/admin/machines → найти ноду по
-`hostname` → **Edit route settings** → одобрить `container_subnet`.
+Нода поднимается с `--advertise-connector --advertise-tags=tag:app-connector`
+и служит app-connector'ом для группы `smart-vpn-users` — селективный по
+доменам egress через эту ноду (chatgpt/claude/hashicorp/…; список доменов
+— в [`tailscale-acl/policy/acl.hujson`](https://github.com/Tsuyakashi/tailscale-acl)).
+Маршруты коннектора авто-одобряются через `autoApprovers.routes` в той же
+ACL — **ручной approve в admin-консоли не нужен**.
 
-После этого:
-- Веб-GUI: `https://<tailscale-ip-ноды>:8006`, `root`, realm **Linux PAM**
-- Контейнеры на `container_subnet` достижимы с любого устройства в
-  тайлнете напрямую, без port forwarding
+Единственное, что нужно проверить руками один раз: нода взяла тег
+`tag:app-connector` (https://login.tailscale.com/admin/machines → по
+`hostname`). Если нет — `tailscale_authkey` был выпущен без права на этот
+тег (`tagOwners = autogroup:admin`), переиздать key с ним.
+
+Веб-GUI: `https://<tailscale-ip-ноды>:8006`, `root`, realm **Linux PAM**.
+
+> `container_subnet` (`vmbr0`/dnsmasq/NAT) в тайлнет больше не advertised —
+> LXC на чистом хосте сейчас нет, доступ нужен к самому хосту по его
+> tailscale-адресу. Вся контейнерная обвязка (мост, DHCP, MASQUERADE)
+> пока оставлена как есть — переосмысление отдельно.
 
 ## Проверка
 
@@ -232,6 +242,8 @@ oci-proxmox-node/
 │   ├── import-debian-image.py     # Шаг 1 — разовый импорт образа, вне Terraform
 │   ├── vault-policy-init.sh       # включает mount oci/ + policy oci-proxmox-node (запустить один раз)
 │   └── vault-apply-wrapper.sh     # лениво тянет секреты+конфиг из Vault на `terraform` в env/*
+├── docs/
+│   └── nexus-cluster-join.md      # присоединение к домашнему кластеру: текущее состояние, разбор, TODO
 └── .gitignore
 ```
 
@@ -240,8 +252,9 @@ oci-proxmox-node/
 - [ ] Проверить `is_pv_encryption_in_transit_enabled` на block volume —
   сейчас не выставлен (default false), совпадает с флагом, заданным при
   импорте образа, но комбинация не тестировалась апстримом
-- [ ] Присоединение к домашнему `nexus-cluster` — не реализовано,
-  отдельная тема (WireGuard-туннель + multi-link corosync с увеличенным
-  token timeout, либо только QDevice-арбитр — см. обсуждение в чате)
+- [ ] Присоединение к домашнему `nexus-cluster` — нода **добавлена**
+  (`pvecm`, Config Version 5, nodeid 3), но изолирована: corosync не
+  собирает кольцо с домашними нодами. Разбор + TODO —
+  [`docs/nexus-cluster-join.md`](docs/nexus-cluster-join.md)
 - [ ] `tailscale_authkey` — если брать одноразовый (не reusable), придётся
   каждый пересоздание инстанса вручную генерить новый в консоли Tailscale
