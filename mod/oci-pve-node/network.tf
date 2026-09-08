@@ -1,8 +1,8 @@
 # Security list: TCP-ingress нет вообще — ни 22, ни 8006. Весь доступ к
 # ноде идёт через Tailscale (overlay), см. bootstrap.sh.tpl шаг с
-# tailscale up --advertise-routes. Открыты только Tailscale UDP-порт
-# (прямые p2p-соединения вместо relay через DERP) и ICMP (path MTU
-# discovery).
+# tailscale up (нода поднимается app-connector'ом; доступ к хосту — по
+# его tailscale-адресу). Открыты только Tailscale UDP-порт (прямые
+# p2p-соединения вместо relay через DERP) и ICMP (path MTU discovery).
 
 resource "oci_core_vcn" "this" {
   compartment_id = var.compartment_ocid
