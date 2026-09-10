@@ -158,6 +158,12 @@ ACL — **ручной approve в admin-консоли не нужен**.
 `hostname`). Если нет — `tailscale_authkey` был выпущен без права на этот
 тег (`tagOwners = autogroup:admin`), переиздать key с ним.
 
+Публичный UDP 2456-2458 в security list — игровой порт Valheim. Сервер
+живёт в LXC на `pve-rog` (изолированный SDN-сегмент, без своего внешнего
+адреса); эта нода принимает трафик на reserved public IP и форвардит его в
+контейнер через тайлнет (грант `tag:app-connector` → `tag:game` в
+[`tailscale-acl`](https://github.com/Tsuyakashi/tailscale-acl)).
+
 Веб-GUI: `https://<tailscale-ip-ноды>:8006`, `root`, realm **Linux PAM**.
 
 > `container_subnet` (`vmbr0`/dnsmasq/NAT) в тайлнет больше не advertised —
@@ -226,7 +232,7 @@ oci-proxmox-node/
 ├── mod/
 │   └── oci-pve-node/              # переиспользуемый модуль — БЕЗ backend/provider
 │       ├── versions.tf            #   required_version + required_providers
-│       ├── network.tf             #   VCN/subnet/IGW/security list (22/tcp + 41641/udp Tailscale, БЕЗ 8006)
+│       ├── network.tf             #   VCN/subnet/IGW/security list (41641/udp Tailscale + 2456-2458/udp Valheim + ICMP, без TCP)
 │       ├── instance.tf            #   инстанс + block volume (ZFS) + reserved public IP
 │       ├── variables.tf           #   всё, что нужно ресурсам — БЕЗ auth-переменных провайдера
 │       ├── outputs.tf

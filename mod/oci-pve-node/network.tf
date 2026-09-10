@@ -1,8 +1,10 @@
 # Security list: TCP-ingress нет вообще — ни 22, ни 8006. Весь доступ к
 # ноде идёт через Tailscale (overlay), см. bootstrap.sh.tpl шаг с
 # tailscale up (нода поднимается app-connector'ом; доступ к хосту — по
-# его tailscale-адресу). Открыты только Tailscale UDP-порт (прямые
-# p2p-соединения вместо relay через DERP) и ICMP (path MTU discovery).
+# его tailscale-адресу). Публичный UDP открыт только для Tailscale (41641,
+# прямые p2p-соединения вместо relay через DERP) и для игрового трафика
+# Valheim (2456-2458), который эта нода реверс-проксирует на LXC на pve-rog
+# через тайлнет. Плюс ICMP (path MTU discovery).
 
 resource "oci_core_vcn" "this" {
   compartment_id = var.compartment_ocid
@@ -48,6 +50,18 @@ resource "oci_core_security_list" "this" {
     udp_options {
       min = 41641
       max = 41641
+    }
+  }
+
+  # Valheim dedicated server — проксируется на LXC на pve-rog через
+  # Tailscale-туннель, эта нода только принимает публичный UDP-трафик
+  # и форвардит дальше (nginx stream / DNAT).
+  ingress_security_rules {
+    source   = "0.0.0.0/0"
+    protocol = "17" # UDP
+    udp_options {
+      min = 2456
+      max = 2458
     }
   }
 
