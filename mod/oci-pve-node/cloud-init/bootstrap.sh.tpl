@@ -193,7 +193,36 @@ zpool create -f -o ashift=12 \
 echo "options zfs zfs_arc_max=2147483648" >/etc/modprobe.d/zfs.conf
 update-initramfs -u -k all
 
-pvesm add zfspool tank --pool tank --content rootdir,images
+# pvesm пишет в /etc/pve/storage.cfg — это FUSE-маунт pmxcfs. Сразу после
+# apt-get install proxmox-ve служба pve-cluster может быть ещё не поднята:
+# запись тогда уходит в теневой каталог ПОД маунтом и молча теряется, как
+# только pmxcfs монтируется поверх (pvesm при этом возвращает 0). Реальный
+# инцидент — 'tank' не подхватился, storage.cfg остался дефолтным. Ждём
+# рабочий маунт /etc/pve, потом трогаем storage.cfg.
+systemctl start pve-cluster
+for _ in $(seq 1 60); do
+    test -f /etc/pve/.version && break
+    sleep 1
+done
+
+# proxmox-ve прописывает в storage.cfg дефолтный lvmthin 'local-lvm'
+# (thinpool pve/data). На этой ноде LVM-группы 'pve' нет — root это plain
+# ext4 на sda1 — так что запись фантомная и всегда inactive.
+# ВАЖНО: storage.cfg общий на весь кластер. `pvesm remove` снесёт
+# local-lvm у ВСЕХ нод, включая домашние bare-pve/pve-rog, где thinpool
+# реально используется. Удаляем только на standalone-ноде; при
+# присоединении к nexus-cluster local-lvm ограничивается нодами вручную
+# (`pvesm set local-lvm --nodes bare-pve,pve-rog`, см. nexus-cluster-join.md).
+if [ "$(ls /etc/pve/nodes/ 2>/dev/null | wc -l)" -le 1 ]; then
+    pvesm remove local-lvm || true
+fi
+
+# --nodes = только эта нода: storage.cfg общий на кластер, без ограничения
+# 'tank' повиснет "?" на bare-pve/pve-rog, где пула нет.
+# Идемпотентно: pvesm add падает, если storage уже определён.
+if ! grep -qE '^zfspool: tank$' /etc/pve/storage.cfg; then
+    pvesm add zfspool tank --pool tank --content rootdir,images --nodes "$(hostname -s)"
+fi
 
 # --- Сеть контейнеров: NAT-мост без физического порта (OCI vNIC
 # принимает трафик только со своим MAC — прямой bridge на физический
