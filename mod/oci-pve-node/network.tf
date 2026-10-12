@@ -76,6 +76,16 @@ resource "oci_core_security_list" "this" {
       code = 4
     }
   }
+
+  # WireGuard — DNAT на CT 411 (scripts/wireguard-lxc-init.sh)
+  ingress_security_rules {
+    source   = "0.0.0.0/0"
+    protocol = "17" # UDP
+    udp_options {
+      min = 51820
+      max = 51820
+    }
+  }
 }
 
 resource "oci_core_subnet" "this" {
