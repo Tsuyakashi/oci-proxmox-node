@@ -264,3 +264,14 @@ oci-proxmox-node/
   [`docs/nexus-cluster-join.md`](docs/nexus-cluster-join.md)
 - [ ] `tailscale_authkey` — если брать одноразовый (не reusable), придётся
   каждый пересоздание инстанса вручную генерить новый в консоли Tailscale
+- [ ] DNS на хосте `oci-pve` не резолвит (`curl: (6) Could not resolve host`),
+  Tailscale жив только за счёт своего bootstrap-DNS. Отваливаются `apt`,
+  `pveam update`. Подозрения: `nameserver 127.0.0.1` от resolvconf-хука
+  dnsmasq при `bind-interfaces` + `except-interface=lo`; либо битый
+  symlink на `stub-resolv.conf` без `systemd-resolved`; либо пустой
+  resolv.conf после перезаписи `/etc/network/interfaces` в Stage 2.
+  После фикса закрепить его в `bootstrap.sh.tpl` (`DNSMASQ_EXCEPT="lo"`
+  и/или статический `nameserver 169.254.169.254`).
+- [ ] `ignore_changes = [metadata["user_data"]]` в `oci_core_instance`:
+  дрейф `bootstrap.sh.tpl` или секретов в Vault форсит replace живой ноды.
+  Пересборка — явно через `-replace`.
