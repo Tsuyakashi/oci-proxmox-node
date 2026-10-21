@@ -11,16 +11,16 @@
 
 locals {
   nodes = {
-    "oci-wg" = {
-      role = "wireguard"
-      # Тот же тег, что у app-connector'а: authkey в Vault выпущен под него,
-      # отдельный тег (tag:wg) потребует нового ключа + tagOwners в
-      # tailscale-acl. --advertise-connector на этой ноде НЕ ставится,
-      # так что коннектором она не становится.
-      ts_tags    = "tag:app-connector"
-      wg_address = "10.66.66.1/24"
-      udp_ports  = [{ min = 51820, max = 51820 }]
-    }
+    # "oci-wg" = {
+    #   role = "wireguard"
+    #   # Тот же тег, что у app-connector'а: authkey в Vault выпущен под него,
+    #   # отдельный тег (tag:wg) потребует нового ключа + tagOwners в
+    #   # tailscale-acl. --advertise-connector на этой ноде НЕ ставится,
+    #   # так что коннектором она не становится.
+    #   ts_tags    = "tag:app-connector"
+    #   wg_address = "10.66.66.1/24"
+    #   udp_ports  = [{ min = 51820, max = 51820 }]
+    # }
 
     "oci-ts" = {
       role    = "tailscale"

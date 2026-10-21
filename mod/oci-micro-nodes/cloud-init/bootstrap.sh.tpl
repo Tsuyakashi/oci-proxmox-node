@@ -47,17 +47,18 @@ Dpkg::Options {
 }
 EOF
 
-# cloud-init может стартовать до готовности DNS — ждём, а не падаем по гонке.
-DNS_READY=0
-for _ in $(seq 1 30); do
-    if getent hosts pkgs.tailscale.com >/dev/null 2>&1; then
-        DNS_READY=1
+# Ждём реальный выход в интернет, не только DNS: reserved IP цепляется к
+# VNIC уже ПОСЛЕ создания инстанса, cloud-init может стартовать раньше.
+NET_READY=0
+for _ in $(seq 1 60); do
+    if curl -4 -fsS -o /dev/null --max-time 5 https://pkgs.tailscale.com; then
+        NET_READY=1
         break
     fi
-    sleep 2
+    sleep 5
 done
-if [ "$${DNS_READY}" -ne 1 ]; then
-    echo "FATAL: DNS не поднялся за 60 секунд" >&2
+if [ "$${NET_READY}" -ne 1 ]; then
+    echo "FATAL: нет выхода в интернет за 5 минут" >&2
     exit 1
 fi
 
