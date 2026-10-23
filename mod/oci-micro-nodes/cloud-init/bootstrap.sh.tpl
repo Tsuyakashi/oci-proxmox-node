@@ -1,8 +1,11 @@
 #!/bin/bash
-# Bootstrap Always-Free VM.Standard.E2.1.Micro (x86, 1 GB RAM) под одну роль:
-#   wireguard — WG-сервер (wg-quick@wg0); Tailscale только для SSH/админки
-#   tailscale — Tailscale app-connector (smart vpn) + опциональный UDP-форвард
-#               Valheim на LXC на pve-rog через тайлнет
+# Bootstrap Always-Free VM.Standard.E2.1.Micro (x86, 1 GB RAM).
+#
+#   role = tailscale — Tailscale app-connector (smart vpn)
+#   role = wireguard — Tailscale только для SSH/админки
+#   wg_address != "" — дополнительно WG-сервер (wg-quick@wg0), на любой роли
+#   valheim_target_ip != "" (role = tailscale) — UDP-форвард Valheim на LXC
+#                     на pve-rog через тайлнет
 #
 # Рендерится templatefile() из instance.tf, cloud-init выполняет один раз.
 # Экранирование: двойной доллар перед фигурной скобкой -> bash-переменная,
@@ -73,10 +76,14 @@ sysctl --system
 
 PRIMARY_IF=$(ip -4 route show default | awk '{print $5; exit}')
 
-%{ if role == "wireguard" ~}
+# Доп. флаги `tailscale up` — переопределяются ролевыми блоками ниже.
+TS_EXTRA=""
+
+%{ if wg_address != "" ~}
 # ============================ WireGuard ============================
-# Приватный ключ генерируется НА ХОСТЕ и никогда не попадает ни в
-# Terraform state, ни в Vault. Пиры — руками (см. docs/micro-nodes.md).
+# Ставится на любой роли, если задан wg_address. Приватный ключ
+# генерируется НА ХОСТЕ и никогда не попадает ни в Terraform state, ни в
+# Vault. Пиры — руками (см. docs/micro-nodes.md).
 apt-get install -y -qq wireguard-tools
 
 umask 077
@@ -98,9 +105,8 @@ umask 022
 
 systemctl enable --now wg-quick@wg0
 echo "WG server pubkey: $(cat /etc/wireguard/server.pub)"
-
-TS_EXTRA=""
 %{ endif ~}
+
 %{ if role == "tailscale" ~}
 # ===================== Tailscale app-connector =====================
 TS_EXTRA="--advertise-connector"
@@ -122,8 +128,8 @@ EOF
 %{ endif ~}
 
 # ============================ Tailscale ============================
-# На обеих нодах: на WG-ноде — только для SSH/админки (22/tcp наружу
-# закрыт), на tailscale-ноде — app-connector для smart-vpn-users.
+# На любой роли: доступ к ноде (22/tcp наружу закрыт); на role=tailscale —
+# ещё и app-connector для smart-vpn-users.
 curl -4 -fsSL https://tailscale.com/install.sh | sh
 
 tailscale up --authkey="${tailscale_authkey}" \
